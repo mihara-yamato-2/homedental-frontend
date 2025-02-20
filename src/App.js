@@ -42,7 +42,7 @@ function App() {
   const handleFinish = async () => {
     try {
       // 1) LIFF初期化
-      await window.liff.init({ liffId: 'YOUR_LIFF_ID' });
+      await window.liff.init({ liffId: '2006515133-eM39A8Q2' });
       if (!window.liff.isLoggedIn()) {
         window.liff.login({});
         return;
