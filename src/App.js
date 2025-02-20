@@ -54,7 +54,7 @@ function App() {
       console.log('LINE userId:', userId);
 
       // 3) 回答をバックエンドへ送信
-      const res = await fetch('https://example.com/api/save-answers', {
+      const res = await fetch('https://homedental-backend-test.onrender.com', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
