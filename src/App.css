@@ -1,0 +1,19 @@
+/* src/App.css */
+/* ざっくり背景色やレイアウトなどを指定 */
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #FBF8F5;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.page-content {
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+  box-sizing: border-box;
+  margin-top: 20px;
+}
