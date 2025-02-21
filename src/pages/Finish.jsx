@@ -1,20 +1,21 @@
 // src/pages/Finish.jsx
 import React from 'react';
 
-function Finish({ answers, onFinish, onBack }) {
+function Finish({ answers, onBack, onFinish }) {
+
+  // ボタン押したときに、いったんanswersをlocalStorageに保存してから onFinish を呼ぶ
+  const handleFinishButton = () => {
+    localStorage.setItem('savedAnswers', JSON.stringify(answers));
+    onFinish();
+  };
+
   return (
     <div style={{ padding: 20 }}>
       <h2>アンケート完了</h2>
-      <p>LINE公式アカウントに登録して結果を受け取る</p>
-      {/* 回答表示(任意) */}
-      <div style={{ margin: '20px 0' }}>
-        <p>Q1: {answers.q1}</p>
-        <p>Q2: {answers.q2.join(', ')}</p>
-        ...
-        <p>Q6: {answers.q6}</p>
-      </div>
-
-      <button onClick={onFinish}>LINEログインして結果を受け取る</button>
+      {/* ここに回答一覧表示 */}
+      <button onClick={handleFinishButton}>
+        LINEログインして結果を送信
+      </button>
       <button onClick={onBack} style={{ marginLeft: 8 }}>戻る</button>
     </div>
   );

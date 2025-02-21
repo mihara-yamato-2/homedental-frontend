@@ -14,7 +14,7 @@ function App() {
   // ページ管理
   const [page, setPage] = useState(0);
 
-  // アンケート回答をまとめるstate
+  // アンケート回答
   const [answers, setAnswers] = useState({
     q1: '',
     q2: [],
@@ -24,73 +24,89 @@ function App() {
     q6: '',
   });
 
-  // (1) マウント時に URLパラメータ "page" を読んで、setPage
+  // ------------------------------
+  // (A) アプリ起動時: ローカルストレージに「answers」があれば復元
+  // ＋ ログイン済みなら自動的に送信
+  // ------------------------------
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const pageParam = params.get('page');
-    if (pageParam) {
-      const pageNum = parseInt(pageParam, 10);
-      setPage(pageNum);
+    // 1) ストレージから読み込み
+    const saved = localStorage.getItem('savedAnswers');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setAnswers(parsed); // Stateに復元
     }
+
+    // 2) liff.init → もしすでにログイン済みなら自動送信
+    (async () => {
+      await window.liff.init({ liffId: '2006939832-bweQAyAR' });
+      if (window.liff.isLoggedIn()) {
+        // ローカルストレージに回答があればすぐ送信
+        if (saved) {
+          await sendAnswers(JSON.parse(saved));
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const goNext = () => setPage((p) => p + 1);
-  const goBack = () => setPage((p) => (p > 0 ? p - 1 : 0));
+  // ページ遷移
+  const goNext = () => setPage(p => p + 1);
+  const goBack = () => setPage(p => (p > 0 ? p - 1 : 0));
 
-  // 質問ページごとの回答をセット
+  // Q1〜Q6の回答を更新
   const handleSetAnswer = (key, value) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+    setAnswers(prev => ({ ...prev, [key]: value }));
   };
 
-  // LINE連携 + 回答送信処理
-  const handleFinish = async () => {
+  // ------------------------------
+  // (B) 実際にサーバーへ送信する関数 (answersObjを引数に)
+  // ------------------------------
+  const sendAnswers = async (answersObj) => {
     try {
-      // 1) LIFF初期化
-      await window.liff.init({ liffId: '2006939832-bweQAyAR' });
-
-      // 2) ログイン判定
-      if (!window.liff.isLoggedIn()) {
-        // まだログインしていない → ログイン開始
-        // (2-A) redirectUriに "?page=7" を付けておく
-        const currentUrl = window.location.href;
-        if (!currentUrl.includes('page=7')) {
-          const sep = currentUrl.includes('?') ? '&' : '?';
-          const redirectUrl = currentUrl + sep + 'page=7';
-          // ログインにリダイレクト
-          window.liff.login({ redirectUri: redirectUrl });
-        } else {
-          // 既に ?page=7 だがログインされてない → ループ防止
-          alert('ログインが完了しませんでした。もう一度お試しください。');
-        }
-        return;
-      }
-
-      // 3) ログイン済みなら プロフィール取得
       const profile = await window.liff.getProfile();
       const userId = profile.userId;
       console.log('LINE userId:', userId);
 
-      // 4) 回答をバックエンドへ送信
       const res = await fetch('https://homedental-backend-test.onrender.com/api/save-answers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          answers,
-        }),
+        body: JSON.stringify({ userId, answers: answersObj }),
       });
 
       if (res.ok) {
         alert('回答を送信しました。LINEで結果をご確認ください。');
+        // 送信成功したらストレージをクリア
+        localStorage.removeItem('savedAnswers');
       } else {
         alert('送信に失敗しました。');
       }
     } catch (err) {
       console.error(err);
-      alert('エラーが発生しました: ' + err.message);
+      alert('送信でエラー発生:' + err.message);
+    }
+  };
+
+  // ------------------------------
+  // (C) Finishページ: ボタンを押すと "answers" を保存 → ログイン → 戻ってきたら自動送信
+  // ------------------------------
+  const handleFinish = async () => {
+    try {
+      // ログイン前に回答をローカルストレージへ保存
+      localStorage.setItem('savedAnswers', JSON.stringify(answers));
+
+      // liff.init
+      await window.liff.init({ liffId: '2006939832-bweQAyAR' });
+      if (!window.liff.isLoggedIn()) {
+        // ログイン開始
+        window.liff.login({});
+        return;
+      }
+
+      // ログイン済みなら すぐ送信
+      await sendAnswers(answers);
+    } catch (err) {
+      console.error(err);
+      alert('エラーが発生:' + err.message);
     }
   };
 
@@ -101,7 +117,7 @@ function App() {
       content = (
         <Q1
           value={answers.q1}
-          onChange={(val) => handleSetAnswer('q1', val)}
+          onChange={val => handleSetAnswer('q1', val)}
           onNext={goNext}
           onBack={goBack}
         />
@@ -111,7 +127,7 @@ function App() {
       content = (
         <Q2
           value={answers.q2}
-          onChange={(vals) => handleSetAnswer('q2', vals)}
+          onChange={vals => handleSetAnswer('q2', vals)}
           onNext={goNext}
           onBack={goBack}
         />
@@ -121,7 +137,7 @@ function App() {
       content = (
         <Q3
           value={answers.q3}
-          onChange={(vals) => handleSetAnswer('q3', vals)}
+          onChange={vals => handleSetAnswer('q3', vals)}
           onNext={goNext}
           onBack={goBack}
         />
@@ -131,7 +147,7 @@ function App() {
       content = (
         <Q4
           value={answers.q4}
-          onChange={(val) => handleSetAnswer('q4', val)}
+          onChange={val => handleSetAnswer('q4', val)}
           onNext={goNext}
           onBack={goBack}
         />
@@ -141,7 +157,7 @@ function App() {
       content = (
         <Q5
           value={answers.q5}
-          onChange={(vals) => handleSetAnswer('q5', vals)}
+          onChange={vals => handleSetAnswer('q5', vals)}
           onNext={goNext}
           onBack={goBack}
         />
@@ -151,13 +167,12 @@ function App() {
       content = (
         <Q6
           value={answers.q6}
-          onChange={(val) => handleSetAnswer('q6', val)}
+          onChange={val => handleSetAnswer('q6', val)}
           onNext={goNext}
           onBack={goBack}
         />
       );
       break;
-    // 7ページ目をFinishページに
     case 7:
       content = (
         <Finish
@@ -174,16 +189,12 @@ function App() {
           <button onClick={() => setPage(1)}>アンケート開始</button>
         </div>
       );
-      break;
   }
 
   return (
     <div className="app-container">
-      {/* ページ>0ならプログレスバー表示 */}
       {page > 0 && <ProgressBar page={page} />}
-      <div className="page-content">
-        {content}
-      </div>
+      <div className="page-content">{content}</div>
     </div>
   );
 }
