@@ -11,6 +11,7 @@ import Finish from './pages/Finish';
 import ProgressBar from './components/ProgressBar';
 
 function App() {
+  // ページ管理
   const [page, setPage] = useState(0);
 
   // アンケート回答をまとめるstate
@@ -23,57 +24,63 @@ function App() {
     q6: '',
   });
 
-  const goNext = () => setPage(p => p + 1);
-  const goBack = () => setPage(p => (p > 0 ? p - 1 : 0));
+  // (1) マウント時に URLパラメータ "page" を読んで、setPage
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pageParam = params.get('page');
+    if (pageParam) {
+      const pageNum = parseInt(pageParam, 10);
+      setPage(pageNum);
+    }
+  }, []);
+
+  const goNext = () => setPage((p) => p + 1);
+  const goBack = () => setPage((p) => (p > 0 ? p - 1 : 0));
 
   // 質問ページごとの回答をセット
   const handleSetAnswer = (key, value) => {
-    setAnswers(prev => ({
+    setAnswers((prev) => ({
       ...prev,
       [key]: value,
     }));
   };
 
-  // (A) ログイン＆リダイレクト設定
-  // Finishボタンを押すと、まだ未ログインならログインを始める
-  // ログイン済みなら fetch() で送信
+  // LINE連携 + 回答送信処理
   const handleFinish = async () => {
     try {
+      // 1) LIFF初期化
       await window.liff.init({ liffId: '2006939832-bweQAyAR' });
+
+      // 2) ログイン判定
       if (!window.liff.isLoggedIn()) {
-        // ログインされていない → redirectUriに ?logged_in=true を付けて再度同じURLに戻る
+        // まだログインしていない → ログイン開始
+        // (2-A) redirectUriに "?page=7" を付けておく
         const currentUrl = window.location.href;
-        if (!currentUrl.includes('logged_in=true')) {
+        if (!currentUrl.includes('page=7')) {
           const sep = currentUrl.includes('?') ? '&' : '?';
-          const redirectUrl = currentUrl + sep + 'logged_in=true';
+          const redirectUrl = currentUrl + sep + 'page=7';
+          // ログインにリダイレクト
           window.liff.login({ redirectUri: redirectUrl });
         } else {
-          // もし ?logged_in=true がすでにあるのに未ログイン → ループ回避
-          alert('ログインが完了しませんでした。再度お試しください。');
+          // 既に ?page=7 だがログインされてない → ループ防止
+          alert('ログインが完了しませんでした。もう一度お試しください。');
         }
         return;
       }
 
-      // ログイン済み → 即座に送信
-      await sendAnswers();
-    } catch (err) {
-      console.error(err);
-      alert('ログインまたは送信でエラー: ' + err.message);
-    }
-  };
-
-  // (B) アンケート結果をバックエンドに送信する関数
-  // これを分離しておくとわかりやすい
-  const sendAnswers = async () => {
-    try {
+      // 3) ログイン済みなら プロフィール取得
       const profile = await window.liff.getProfile();
       const userId = profile.userId;
       console.log('LINE userId:', userId);
 
+      // 4) 回答をバックエンドへ送信
       const res = await fetch('https://homedental-backend-test.onrender.com/api/save-answers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, answers }),
+        body: JSON.stringify({
+          userId,
+          answers,
+        }),
       });
 
       if (res.ok) {
@@ -82,21 +89,10 @@ function App() {
         alert('送信に失敗しました。');
       }
     } catch (err) {
-      console.error('送信エラー:', err);
-      alert('送信処理でエラーが発生しました: ' + err.message);
+      console.error(err);
+      alert('エラーが発生しました: ' + err.message);
     }
   };
-
-  // (C) useEffectで「?logged_in=true」を検知 → 戻ってきた直後に自動送信
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('logged_in') === 'true') {
-      handleFinish();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
-  // ↑ ESLintが "missing dependency handleFinish" と警告するかもしれませんが、
-  //    「一度だけ実行」 なら下記の方法2を参照
 
   // ページ切り替え
   let content;
@@ -161,8 +157,7 @@ function App() {
         />
       );
       break;
-
-    // 7ページ目を Finishページに
+    // 7ページ目をFinishページに
     case 7:
       content = (
         <Finish
@@ -172,7 +167,6 @@ function App() {
         />
       );
       break;
-
     default:
       content = (
         <div style={{ padding: 20 }}>
