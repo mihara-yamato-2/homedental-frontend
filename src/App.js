@@ -91,10 +91,9 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('logged_in') === 'true') {
-      // ログイン完了して戻ってきたはず → すぐに handleFinish() で送信
       handleFinish();
-      // これによりユーザーは追加のボタンを押さなくて済む
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
   // ↑ ESLintが "missing dependency handleFinish" と警告するかもしれませんが、
   //    「一度だけ実行」 なら下記の方法2を参照
