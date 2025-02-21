@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// src/App.js
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import Q1 from './pages/Q1';
 import Q2 from './pages/Q2';
@@ -12,6 +13,7 @@ import ProgressBar from './components/ProgressBar';
 function App() {
   const [page, setPage] = useState(0);
 
+  // アンケート回答をまとめるstate
   const [answers, setAnswers] = useState({
     q1: '',
     q2: [],
@@ -24,7 +26,7 @@ function App() {
   const goNext = () => setPage(p => p + 1);
   const goBack = () => setPage(p => (p > 0 ? p - 1 : 0));
 
-  // ◇回答を保存する関数
+  // 質問ページごとの回答をセット
   const handleSetAnswer = (key, value) => {
     setAnswers(prev => ({
       ...prev,
@@ -32,15 +34,42 @@ function App() {
     }));
   };
 
-  // (A) 送信用の関数を useCallback で安定化
-  const sendAnswers = useCallback(async () => {
+  // (A) ログイン＆リダイレクト設定
+  // Finishボタンを押すと、まだ未ログインならログインを始める
+  // ログイン済みなら fetch() で送信
+  const handleFinish = async () => {
     try {
-      // ログイン後に userId を取得
+      await window.liff.init({ liffId: '2006939832-bweQAyAR' });
+      if (!window.liff.isLoggedIn()) {
+        // ログインされていない → redirectUriに ?logged_in=true を付けて再度同じURLに戻る
+        const currentUrl = window.location.href;
+        if (!currentUrl.includes('logged_in=true')) {
+          const sep = currentUrl.includes('?') ? '&' : '?';
+          const redirectUrl = currentUrl + sep + 'logged_in=true';
+          window.liff.login({ redirectUri: redirectUrl });
+        } else {
+          // もし ?logged_in=true がすでにあるのに未ログイン → ループ回避
+          alert('ログインが完了しませんでした。再度お試しください。');
+        }
+        return;
+      }
+
+      // ログイン済み → 即座に送信
+      await sendAnswers();
+    } catch (err) {
+      console.error(err);
+      alert('ログインまたは送信でエラー: ' + err.message);
+    }
+  };
+
+  // (B) アンケート結果をバックエンドに送信する関数
+  // これを分離しておくとわかりやすい
+  const sendAnswers = async () => {
+    try {
       const profile = await window.liff.getProfile();
       const userId = profile.userId;
       console.log('LINE userId:', userId);
 
-      // バックエンドにPOST
       const res = await fetch('https://homedental-backend-test.onrender.com/api/save-answers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,76 +82,88 @@ function App() {
         alert('送信に失敗しました。');
       }
     } catch (err) {
-      console.error('送信時エラー:', err);
-      alert('送信時にエラーが発生しました: ' + err.message);
+      console.error('送信エラー:', err);
+      alert('送信処理でエラーが発生しました: ' + err.message);
     }
-  }, [answers]); 
-  // ↑ answers が変わると、新しい値で送信できるようにする
+  };
 
-  // (B) Finishページのボタンを押したときに呼ばれる関数
-  const handleFinish = useCallback(async () => {
-    try {
-      // 1) LIFF初期化
-      await window.liff.init({ liffId: '2006939832-bweQAyAR' });
-
-      // 2) ログイン判定
-      if (!window.liff.isLoggedIn()) {
-        const currentUrl = window.location.href;
-        const hasParam = currentUrl.includes('logged_in=true');
-        if (!hasParam) {
-          let separator = currentUrl.includes('?') ? '&' : '?';
-          const redirectUrl = currentUrl + separator + 'logged_in=true';
-
-          // ログイン時にリダイレクト先を指定
-          window.liff.login({ redirectUri: redirectUrl });
-        } else {
-          alert('ログインが完了しませんでした。もう一度お試しください。');
-        }
-        return;
-      }
-
-      // 3) すでにログイン済み → アンケート送信
-      await sendAnswers();
-
-    } catch (err) {
-      console.error('handleFinishエラー:', err);
-      alert('ログインまたは送信時にエラーが発生しました: ' + err.message);
-    }
-  }, [sendAnswers]); 
-  // ↑ useCallback により、ESLint的にも依存関係が明確になる
-
-  // (C) ログイン後のリダイレクトで戻ったら ?logged_in=true を検出
+  // (C) useEffectで「?logged_in=true」を検知 → 戻ってきた直後に自動送信
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const isLoggedInParam = urlParams.get('logged_in');
-    if (isLoggedInParam === 'true') {
-      // 自動的に handleFinish を再度呼ぶ（ログイン済み状態で sendAnswers する）
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('logged_in') === 'true') {
+      // ログイン完了して戻ってきたはず → すぐに handleFinish() で送信
       handleFinish();
+      // これによりユーザーは追加のボタンを押さなくて済む
     }
-  }, [handleFinish]);
-  // ↑ handleFinish を依存に含める
+  }, []); 
+  // ↑ ESLintが "missing dependency handleFinish" と警告するかもしれませんが、
+  //    「一度だけ実行」 なら下記の方法2を参照
 
-  // ページ描画
+  // ページ切り替え
   let content;
   switch (page) {
     case 1:
-      content = <Q1 value={answers.q1} onChange={val => handleSetAnswer('q1', val)} onNext={goNext} onBack={goBack} />;
+      content = (
+        <Q1
+          value={answers.q1}
+          onChange={(val) => handleSetAnswer('q1', val)}
+          onNext={goNext}
+          onBack={goBack}
+        />
+      );
       break;
     case 2:
-      content = <Q2 value={answers.q2} onChange={vals => handleSetAnswer('q2', vals)} onNext={goNext} onBack={goBack} />;
+      content = (
+        <Q2
+          value={answers.q2}
+          onChange={(vals) => handleSetAnswer('q2', vals)}
+          onNext={goNext}
+          onBack={goBack}
+        />
+      );
       break;
     case 3:
-      content = <Q3 value={answers.q3} onChange={vals => handleSetAnswer('q3', vals)} onNext={goNext} onBack={goBack} />;
+      content = (
+        <Q3
+          value={answers.q3}
+          onChange={(vals) => handleSetAnswer('q3', vals)}
+          onNext={goNext}
+          onBack={goBack}
+        />
+      );
       break;
     case 4:
-      content = <Q4 value={answers.q4} onChange={val => handleSetAnswer('q4', val)} onNext={goNext} onBack={goBack} />;
+      content = (
+        <Q4
+          value={answers.q4}
+          onChange={(val) => handleSetAnswer('q4', val)}
+          onNext={goNext}
+          onBack={goBack}
+        />
+      );
       break;
     case 5:
-      content = <Q5 value={answers.q5} onChange={vals => handleSetAnswer('q5', vals)} onNext={goNext} onBack={goBack} />;
+      content = (
+        <Q5
+          value={answers.q5}
+          onChange={(vals) => handleSetAnswer('q5', vals)}
+          onNext={goNext}
+          onBack={goBack}
+        />
+      );
       break;
     case 6:
-      content = <Q6 value={answers.q6} onChange={val => handleSetAnswer('q6', val)} onNext={goNext} onBack={goBack} />;
+      content = (
+        <Q6
+          value={answers.q6}
+          onChange={(val) => handleSetAnswer('q6', val)}
+          onNext={goNext}
+          onBack={goBack}
+        />
+      );
       break;
+
+    // 7ページ目を Finishページに
     case 7:
       content = (
         <Finish
@@ -132,6 +173,7 @@ function App() {
         />
       );
       break;
+
     default:
       content = (
         <div style={{ padding: 20 }}>
@@ -144,6 +186,7 @@ function App() {
 
   return (
     <div className="app-container">
+      {/* ページ>0ならプログレスバー表示 */}
       {page > 0 && <ProgressBar page={page} />}
       <div className="page-content">
         {content}
