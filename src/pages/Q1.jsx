@@ -26,7 +26,7 @@ const Q1 = ({ value, onChange, onNext, onBack }) => {
 
   const handleNext = () => {
     if (!selectedIssue) {
-      alert('お悩みを1つ選んでください');
+      alert('お悩みを1つ選んでくださいaaaa');
       return;
     }
     onNext();
