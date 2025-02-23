@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 const Q1 = ({ value, onChange, onNext, onBack }) => {
   const issues = [
     '出っ歯(上顎前突)',
-    'すきっ歯(空隙歯列)',
+    'すきっ歯(空隙歯列)aaaaaaaaaaaaaaa',
     'ガタガタや八重歯(叢生)',
     '前歯が閉じない(開咬)',
     '受け口(反対咬合)',
